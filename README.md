@@ -1,0 +1,2 @@
+# pingless
+ self hosted discord 
