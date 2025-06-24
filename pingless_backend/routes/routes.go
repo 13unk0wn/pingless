@@ -28,6 +28,9 @@ func Routes(db *sqlx.DB) {
 		user.CreateUser(w, r, db)
 	})
 
+	r.Post("/api/user/verify_user", func(w http.ResponseWriter, r *http.Request) {
+		user.VerifyUser(w, r, db)
+	})
 	http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }
 

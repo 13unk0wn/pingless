@@ -44,7 +44,6 @@ CREATE TABLE IF NOT EXISTS users (
 	username TEXT NOT NULL UNIQUE,
 	email VARCHAR(319) NOT NULL UNIQUE,
 	password_hash TEXT NOT NULL,
-	verified BOOLEAN NOT NULL DEFAULT FALSE,
 
 	pfp TEXT,                  -- avatar URL or path
 	header TEXT,               -- banner URL or path
