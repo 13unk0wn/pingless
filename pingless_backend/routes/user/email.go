@@ -15,6 +15,15 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+/*
+NOTE : This file deal with all the email and otp verification
+
+TODO:
+ [ ] Add option for custom email template
+ [ ] Add middleware for these endpoints to not work when Server is set to invite only
+*/
+
+// TODO : dont send email if already Verified
 func Email(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
 	var email EmailSend
 
@@ -36,13 +45,51 @@ func Email(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
 	if err := insertEmailVerification(db, &verify); err != nil {
 		log.Println(err)
 		http.Error(w, "Database Error", http.StatusInternalServerError)
+		return
 	}
 	if err := sendEmail(db, email.Email, otp); err != nil {
 		log.Println(err)
 		http.Error(w, "Verification email Cannot Be Send", http.StatusInternalServerError)
+		return
 	}
+
 	w.WriteHeader(http.StatusAccepted)
-	w.Write([]byte("Email Send"))
+	w.Write([]byte("Email Send\n"))
+}
+
+// TODO : Reject Request when already verified
+func OtpVerify(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	var otp OtpVerifyModel
+
+	if err := json.NewDecoder(r.Body).Decode(&otp); err != nil {
+		log.Println(err)
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	var hashedOrignalOtp string
+	var created_at time.Time
+	err := db.QueryRow("SELECT otp_hash,created_at FROM email_verifications WHERE email = ? ", otp.Email).Scan(&hashedOrignalOtp, &created_at)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Database Error", http.StatusInternalServerError)
+		return
+	}
+	hashedUserOtp := HashOTP(otp.Otp)
+	if hashedOrignalOtp != hashedUserOtp || time.Now().After(created_at.Add(10*time.Minute)) {
+		log.Println(err)
+		http.Error(w, "Unauthorized", http.StatusBadRequest)
+		return
+	}
+
+	_, err = db.Exec("UPDATE email_verifications SET verified = TRUE where email =  ?", otp.Email)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Database Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte("Verified\n"))
 }
 
 func HashOTP(otp string) string {
@@ -63,6 +110,8 @@ func insertEmailVerification(db *sqlx.DB, verify *EmailVerification) error {
 func sendEmail(db *sqlx.DB, to string, otp string) error {
 	var from string
 	var password string
+	var host string
+	var port string
 
 	err := db.QueryRow("SELECT value FROM settings WHERE key = 'email'").Scan(&from)
 	if err != nil {
@@ -73,8 +122,14 @@ func sendEmail(db *sqlx.DB, to string, otp string) error {
 	if err != nil {
 		return err
 	}
-	host := "smtp.gmail.com"
-	port := "587"
+	err = db.QueryRow("SELECT value FROM settings WHERE key = 'emailHost'").Scan(&host)
+	if err != nil {
+		return err
+	}
+	err = db.QueryRow("SELECT value FROM settings WHERE key = 'emailPort'").Scan(&port)
+	if err != nil {
+		return err
+	}
 
 	subject := "Your Pingless Verification Code"
 

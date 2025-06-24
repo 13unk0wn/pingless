@@ -2,14 +2,13 @@ package routes
 
 import (
 	"fmt"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jmoiron/sqlx"
 	"log"
 	"net/http"
 	"pingless/routes/user"
 	"strconv"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jmoiron/sqlx"
 )
 
 func Routes(db *sqlx.DB) {
@@ -19,8 +18,14 @@ func Routes(db *sqlx.DB) {
 	if err != nil {
 		log.Fatal("Error in getting Port ", err)
 	}
-	r.Post("/api/emailVerification", func(w http.ResponseWriter, r *http.Request) {
+	r.Post("/api/user/email_verification", func(w http.ResponseWriter, r *http.Request) {
 		user.Email(w, r, db)
+	})
+	r.Post("/api/user/otp_verification", func(w http.ResponseWriter, r *http.Request) {
+		user.OtpVerify(w, r, db)
+	})
+	r.Post("/api/user/create_user", func(w http.ResponseWriter, r *http.Request) {
+		user.CreateUser(w, r, db)
 	})
 
 	http.ListenAndServe(fmt.Sprintf(":%d", port), r)

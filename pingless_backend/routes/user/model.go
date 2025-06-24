@@ -10,5 +10,16 @@ type EmailVerification struct {
 }
 
 type EmailSend struct {
-	Email string `db:"email"`
+	Email string `json:"email"`
+}
+
+type OtpVerifyModel struct {
+	Email string `json:"email"`
+	Otp   string `json:"otp"`
+}
+
+type CreateUserModel struct {
+	Email    string `json:"email" db:"email"`
+	Password string `json:"password" db:"password"`
+	Username string `json:"username" db:"username"`
 }

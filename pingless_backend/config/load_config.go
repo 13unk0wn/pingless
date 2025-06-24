@@ -14,6 +14,8 @@ type Config struct {
 	Port       int    `env:"PORT" envDefault:"8080"`
 	Email      string `env:"EMAIL" env-required:"true"`
 	Password   string `env:"PASSWORD" env-required:"true"`
+	EmailHost  string `env:"EMAIL_HOST" env-required:"true"`
+	EmailPort  string `env:"EMAIL_PORT" env-required:"true"`
 }
 
 func LoadConfig(db *sqlx.DB) Config {
@@ -30,6 +32,8 @@ func LoadConfig(db *sqlx.DB) Config {
 	saveSetting(db, "port", strconv.Itoa(cfg.Port))
 	saveSetting(db, "email", cfg.Email)
 	saveSetting(db, "password", cfg.Password)
+	saveSetting(db, "emailHost", cfg.EmailHost)
+	saveSetting(db, "emailPort", cfg.EmailPort)
 
 	return cfg
 }
