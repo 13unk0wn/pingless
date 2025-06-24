@@ -25,27 +25,55 @@ func Init() (*sqlx.DB, error) {
 }
 
 func makeMigration(db *sqlx.DB) error {
-	return makeUserMigration(db)
+	if err := makeUserMigration(db); err != nil {
+		return err
+	}
+	if err := createEmailVerificationTable(db); err != nil {
+		return err
+	}
+	if err := createSettingsTable(db); err != nil {
+		return err
+	}
+	return nil
 }
 
 func makeUserMigration(db *sqlx.DB) error {
 	schema := `
-CREATE TABLE IF NOT EXISTS user (
+CREATE TABLE IF NOT EXISTS users (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	username TEXT NOT NULL,                             -- display name
+	username TEXT NOT NULL UNIQUE,
 	email VARCHAR(319) NOT NULL UNIQUE,
-	password TEXT NOT NULL,
-	otp TEXT NOT NULL,
+	password_hash TEXT NOT NULL,
 	verified BOOLEAN NOT NULL DEFAULT FALSE,
 
-	pfp TEXT,                                           -- profile image path or URL
-	pfp_type TEXT CHECK(pfp_type IN ('image', 'gif')) DEFAULT 'image',
+	pfp TEXT,                  -- avatar URL or path
+	header TEXT,               -- banner URL or path
+	bio TEXT DEFAULT '',
 
-	header TEXT,                                        -- header image path or URL
-	header_type TEXT CHECK(header_type IN ('image', 'gif')) DEFAULT 'image',
-
-	bio TEXT DEFAULT '',                                -- short user description
 	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);`
+
+	_, err := db.Exec(schema)
+	return err
+}
+
+func createEmailVerificationTable(db *sqlx.DB) error {
+	schema := `
+CREATE TABLE IF NOT EXISTS email_verifications (
+	email VARCHAR(319) PRIMARY KEY,
+	otp_hash TEXT NOT NULL,
+	verified BOOLEAN NOT NULL DEFAULT FALSE,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);`
+	_, err := db.Exec(schema)
+	return err
+}
+
+func createSettingsTable(db *sqlx.DB) error {
+	schema := `
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );`
 	_, err := db.Exec(schema)
 	return err
