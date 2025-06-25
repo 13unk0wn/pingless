@@ -59,3 +59,20 @@ func IsGifAllowed(db *sqlx.DB) func(http.Handler) http.Handler {
 		})
 	}
 }
+func IsInviteOnly(db *sqlx.DB) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var inviteOnly string
+			err := db.QueryRow("SELECT value FROM settings WHERE key = 'inviteOnly'").Scan(&inviteOnly)
+			if err != nil {
+				http.Error(w, "DB ERROR", http.StatusUnauthorized)
+				return
+			}
+			if inviteOnly == "true" {
+				http.Error(w, "Server is invite only", http.StatusUnauthorized)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

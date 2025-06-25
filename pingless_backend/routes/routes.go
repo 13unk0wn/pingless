@@ -24,10 +24,6 @@ func Routes(db *sqlx.DB) {
 	r.Post("/api/user/otp_verification", func(w http.ResponseWriter, r *http.Request) {
 		user.OtpVerify(w, r, db)
 	})
-	r.Post("/api/user/create_user", func(w http.ResponseWriter, r *http.Request) {
-		user.CreateUser(w, r, db)
-	})
-
 	r.Post("/api/user/verify_user", func(w http.ResponseWriter, r *http.Request) {
 		user.VerifyUser(w, r, db)
 	})
@@ -36,6 +32,9 @@ func Routes(db *sqlx.DB) {
 	})
 	r.With(user.VerifiyAccessToken).With(user.IsGifAllowed(db)).Post("/api/user/upload_pfp_gif", func(w http.ResponseWriter, r *http.Request) {
 		user.UpdatePfpGif(w, r, db)
+	})
+	r.With(user.IsInviteOnly(db)).Post("/api/user/create_user", func(w http.ResponseWriter, r *http.Request) {
+		user.CreateUser(w, r, db)
 	})
 	http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }

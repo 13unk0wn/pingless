@@ -29,7 +29,7 @@ func LoadConfig(db *sqlx.DB) Config {
 	}
 
 	// Save all values into DB
-	saveSetting(db, "invite_only", boolToStr(cfg.InviteOnly))
+	saveSetting(db, "inviteOnly", boolToStr(cfg.InviteOnly))
 	saveSetting(db, "port", strconv.Itoa(cfg.Port))
 	saveSetting(db, "email", cfg.Email)
 	saveSetting(db, "password", cfg.Password)
