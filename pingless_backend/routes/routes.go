@@ -31,6 +31,9 @@ func Routes(db *sqlx.DB) {
 	r.Post("/api/user/verify_user", func(w http.ResponseWriter, r *http.Request) {
 		user.VerifyUser(w, r, db)
 	})
+	r.With(user.VerifiyAccessToken).Post("/api/user/upload_pfp", func(w http.ResponseWriter, r *http.Request) {
+		user.UpdatePfp(w, r, db)
+	})
 	http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }
 
