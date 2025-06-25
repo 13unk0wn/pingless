@@ -1,0 +1,6 @@
+curl -X POST http://localhost:3000/api/user/upload_pfp \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTA5MjMyMDksInVzZXJuYW1lIjoiMTN1bmswd24ifQ.rMiB4YVBbk-JDThc4-4tSVvbq907KAtTwjoB1nf0Wc8" \
+  -F "pfp=@test.jpg"
+
+
+

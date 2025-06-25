@@ -34,6 +34,9 @@ func Routes(db *sqlx.DB) {
 	r.With(user.VerifiyAccessToken).Post("/api/user/upload_pfp", func(w http.ResponseWriter, r *http.Request) {
 		user.UpdatePfp(w, r, db)
 	})
+	r.With(user.VerifiyAccessToken).With(user.IsGifAllowed(db)).Post("/api/user/upload_pfp_gif", func(w http.ResponseWriter, r *http.Request) {
+		user.UpdatePfpGif(w, r, db)
+	})
 	http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }
 

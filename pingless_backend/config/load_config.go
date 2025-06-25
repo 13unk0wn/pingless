@@ -16,6 +16,7 @@ type Config struct {
 	Password   string `env:"PASSWORD" env-required:"true"`
 	EmailHost  string `env:"EMAIL_HOST" env-required:"true"`
 	EmailPort  string `env:"EMAIL_PORT" env-required:"true"`
+	GifAllowed string `env:"GIF_ALLOWED" envDefault:"true"`
 }
 
 func LoadConfig(db *sqlx.DB) Config {
@@ -34,7 +35,7 @@ func LoadConfig(db *sqlx.DB) Config {
 	saveSetting(db, "password", cfg.Password)
 	saveSetting(db, "emailHost", cfg.EmailHost)
 	saveSetting(db, "emailPort", cfg.EmailPort)
-
+	saveSetting(db, "GifAllowed", cfg.GifAllowed)
 	return cfg
 }
 
