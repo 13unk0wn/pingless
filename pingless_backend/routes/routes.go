@@ -2,13 +2,15 @@ package routes
 
 import (
 	"fmt"
+	"log"
+	"net/http"
+	serversetup "pingless/routes/server_setup"
+	"pingless/routes/user"
+	"strconv"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jmoiron/sqlx"
-	"log"
-	"net/http"
-	"pingless/routes/user"
-	"strconv"
 )
 
 func Routes(db *sqlx.DB) {
@@ -26,6 +28,9 @@ func Routes(db *sqlx.DB) {
 	})
 	r.Post("/api/user/verify_user", func(w http.ResponseWriter, r *http.Request) {
 		user.VerifyUser(w, r, db)
+	})
+	r.Post("/api/server/create_owner", func(w http.ResponseWriter, r *http.Request) {
+		serversetup.CreateOwner(w, r, db)
 	})
 	r.With(user.VerifiyAccessToken).Post("/api/user/upload_pfp", func(w http.ResponseWriter, r *http.Request) {
 		user.UpdatePfp(w, r, db)
