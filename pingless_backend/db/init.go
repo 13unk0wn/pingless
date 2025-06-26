@@ -34,6 +34,9 @@ func makeMigration(db *sqlx.DB) error {
 	if err := createSettingsTable(db); err != nil {
 		return err
 	}
+	if err := createServerSettingsTable(db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -73,6 +76,24 @@ func createSettingsTable(db *sqlx.DB) error {
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);`
+	_, err := db.Exec(schema)
+	return err
+}
+
+func createServerSettingsTable(db *sqlx.DB) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS server_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),  -- Singleton enforcement
+    name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 100),
+
+    icon_url TEXT,        -- Server icon path or URL
+    banner_url TEXT,      -- Optional banner image
+
+    allow_gif_pfp BOOLEAN NOT NULL DEFAULT FALSE,
+    invite_only BOOLEAN NOT NULL DEFAULT TRUE,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );`
 	_, err := db.Exec(schema)
 	return err
