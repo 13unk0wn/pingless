@@ -70,7 +70,7 @@ func createOwnerQuery(db *sqlx.DB, user *user.CreateUserModel) error {
 	_, err := db.Exec(`
 		INSERT INTO users (username, email, password_hash, role_id)
 		VALUES (?, ?, ?, 1)
-	`, user.Email, user.Email, user.Password)
+	`, user.Username, user.Email, user.Password)
 	return err
 }
 
@@ -84,9 +84,10 @@ func SetServerName(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
 	}
 
 	server.ServerName = strings.Trim(server.ServerName, " ")
+	log.Println(server.ServerName)
 
 	len := len(server.ServerName)
-	if len > SERVER_NAME_LENGTH || len != 0 {
+	if len > SERVER_NAME_LENGTH || len == 0 {
 		log.Println("Server name length more than 200")
 		http.Error(w, "Allowed length 1 ≤ len ≤ 200", http.StatusBadRequest)
 		return

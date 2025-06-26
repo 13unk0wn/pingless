@@ -50,6 +50,9 @@ func Routes(db *sqlx.DB) {
 	r.With(user.IsInviteOnly(db)).Post("/api/user/create_user", func(w http.ResponseWriter, r *http.Request) {
 		user.CreateUser(w, r, db)
 	})
+	r.With(user.VerifiyAccessToken).With(serversetup.CanchangeServerSettings(db)).Post("/api/server/change_name", func(w http.ResponseWriter, r *http.Request) {
+		serversetup.SetServerName(w, r, db)
+	})
 	http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }
 
