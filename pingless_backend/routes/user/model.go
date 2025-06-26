@@ -28,3 +28,7 @@ type VerifyUserModel struct {
 	Username string `json:"username" db:"username"`
 	Password string `json:"password" db:"password"`
 }
+
+type UpdateBioModel struct {
+	Bio string `json:"bio" db:"bio"`
+}

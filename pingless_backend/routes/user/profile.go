@@ -1,6 +1,7 @@
 package user
 
 import (
+	"encoding/json"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/chai2010/webp"
 	"github.com/golang-jwt/jwt/v5"
@@ -20,11 +22,11 @@ import (
 /*
 NOTE : This file is contains endpoint for All the Profile Options
 
-
 TODO:
 [ ] Delete Profile picture if it already exist
 [ ] Implement Bio
 */
+const MAX_BIO_SIZE int = 200
 
 type fileUploadConfig struct {
 	formFieldName    string
@@ -207,4 +209,45 @@ func convertToWebP(src io.Reader, dstPath string) error {
 	// Encode to WebP
 	op := &webp.Options{Lossless: true}
 	return webp.Encode(out, img, op)
+}
+
+func UpdateBio(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	// Checking claims
+	claims, ok := r.Context().Value("props").(jwt.MapClaims)
+	if !ok {
+		log.Println("Invalid token claims context")
+		http.Error(w, "Invalid token claims", http.StatusInternalServerError)
+		return
+	}
+
+	// Converting to string
+	username, err := claims["username"].(string)
+	if !err {
+		log.Println("username claim not a string")
+		http.Error(w, "Invalid token payload", http.StatusUnauthorized)
+		return
+	}
+
+	// json decoding
+	var bio UpdateBioModel
+	if err := json.NewDecoder(r.Body).Decode(&bio); err != nil {
+		http.Error(w, "Invalid Json", http.StatusBadRequest)
+		return
+	}
+
+	bio.Bio = strings.Trim(bio.Bio, " ") // trim whitespace
+	if len(bio.Bio) > MAX_BIO_SIZE {
+		http.Error(w, "Max length exceded", http.StatusBadRequest)
+		return
+	}
+	// UPDATE in DB
+	_, success := db.Exec("UPDATE users SET bio = ? WHERE username = ?", bio.Bio, username)
+	if success != nil {
+		http.Error(w, "DB ERROR", http.StatusInternalServerError)
+		return
+	}
+
+	//Response
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte("Bio Updated\n"))
 }
