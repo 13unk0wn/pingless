@@ -1,11 +1,13 @@
 package user
 
 import (
+	"fmt"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,9 +23,72 @@ NOTE : This file is contains endpoint for All the Profile Options
 
 TODO:
 [ ] Delete Profile picture if it already exist
+[ ] Implement Bio
 */
 
+type fileUploadConfig struct {
+	formFieldName    string
+	maxFileSize      int64
+	allowedMimeTypes map[string]bool
+	uploadSubDir     string
+	dbColumnName     string
+	fileExtension    string
+	isWebp           bool
+}
+
 func UpdatePfp(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	config := fileUploadConfig{
+		formFieldName:    "pfp",
+		maxFileSize:      5 << 20, // 5MB
+		allowedMimeTypes: map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true},
+		uploadSubDir:     "pfp",
+		dbColumnName:     "pfp",
+		fileExtension:    ".webp",
+		isWebp:           true,
+	}
+	handleFileUpload(w, r, db, config)
+}
+
+func UpdatePfpGif(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	config := fileUploadConfig{
+		formFieldName:    "pfp",
+		maxFileSize:      8 << 20, // 8MB
+		allowedMimeTypes: map[string]bool{"image/gif": true},
+		uploadSubDir:     "pfp",
+		dbColumnName:     "pfp",
+		fileExtension:    ".gif",
+		isWebp:           false,
+	}
+	handleFileUpload(w, r, db, config)
+}
+
+func UpdateBanner(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	config := fileUploadConfig{
+		formFieldName:    "banner",
+		maxFileSize:      5 << 20, // 5MB
+		allowedMimeTypes: map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true},
+		uploadSubDir:     "banner",
+		dbColumnName:     "banner",
+		fileExtension:    ".webp",
+		isWebp:           true,
+	}
+	handleFileUpload(w, r, db, config)
+}
+
+func UpdateBannerGif(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	config := fileUploadConfig{
+		formFieldName:    "banner",
+		maxFileSize:      8 << 20, // 8MB
+		allowedMimeTypes: map[string]bool{"image/gif": true},
+		uploadSubDir:     "banner",
+		dbColumnName:     "banner",
+		fileExtension:    ".gif",
+		isWebp:           false,
+	}
+	handleFileUpload(w, r, db, config)
+}
+
+func handleFileUpload(w http.ResponseWriter, r *http.Request, db *sqlx.DB, config fileUploadConfig) {
 	// Extract JWT claims from context
 	claims, ok := r.Context().Value("props").(jwt.MapClaims)
 	if !ok {
@@ -38,62 +103,50 @@ func UpdatePfp(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
 		return
 	}
 
-	// Parse uploaded form (max 5MB)
-	err := r.ParseMultipartForm(5 << 20)
+	// Limit request body size before parsing
+	r.Body = http.MaxBytesReader(w, r.Body, config.maxFileSize)
+	err := r.ParseMultipartForm(config.maxFileSize)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, "File size exceeds 2MB", http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("File size exceeds %dMB", config.maxFileSize>>20), http.StatusRequestEntityTooLarge)
 		return
 	}
 
-	// Read image file
-	file, _, err := r.FormFile("pfp")
+	// Get the file
+	file, _, err := r.FormFile(config.formFieldName)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, "Cannot read uploaded image", http.StatusInternalServerError)
+		http.Error(w, "Cannot read uploaded image", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
-	// Detect image content type
-	buf := make([]byte, 512)
-	_, err = file.Read(buf)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, "Failed to read image", http.StatusInternalServerError)
-		return
-	}
-	contentType := http.DetectContentType(buf)
-
-	allowed := map[string]bool{
-		"image/jpeg": true,
-		"image/png":  true,
-		"image/webp": true,
-	}
-	if !allowed[contentType] {
-		http.Error(w, "Only PNG, JPEG, and WebP images are allowed", http.StatusBadRequest)
+	// Check MIME type
+	if err := checkMimeType(file, config.allowedMimeTypes); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Reset file pointer before decoding
-	_, err = file.Seek(0, io.SeekStart)
-	if err != nil {
-		log.Println(err)
+	// Rewind file
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		http.Error(w, "Failed to rewind file", http.StatusInternalServerError)
 		return
 	}
 
-	// Convert to WebP and save
-	pfpPath := filepath.Join("uploads", "pfp", username+".webp")
-	err = convertToWebP(file, pfpPath)
+	// Save file
+	dstPath := filepath.Join("uploads", config.uploadSubDir, username+config.fileExtension)
+	if config.isWebp {
+		err = convertToWebP(file, dstPath)
+	} else {
+		err = saveRawFile(file, dstPath)
+	}
 	if err != nil {
-		log.Println("Image conversion failed:", err)
-		http.Error(w, "Failed to convert image to WebP", http.StatusInternalServerError)
+		log.Println("File saving failed:", err)
+		http.Error(w, "Failed to save file", http.StatusInternalServerError)
 		return
 	}
 
 	// Update DB with new path
-	_, err = db.Exec("UPDATE users SET pfp = ? WHERE username = ?", pfpPath, username)
+	query := fmt.Sprintf("UPDATE users SET %s = ? WHERE username = ?", config.dbColumnName)
+	_, err = db.Exec(query, dstPath, username)
 	if err != nil {
 		log.Println("DB update error:", err)
 		http.Error(w, "Database update failed", http.StatusInternalServerError)
@@ -102,88 +155,33 @@ func UpdatePfp(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
 
 	// Success
 	w.WriteHeader(http.StatusAccepted)
-	w.Write([]byte("Image uploaded successfully\n"))
+	w.Write([]byte("File uploaded successfully\n"))
 }
 
-func UpdatePfpGif(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
-
-	// Extract JWT claims
-	claims, ok := r.Context().Value("props").(jwt.MapClaims)
-	if !ok {
-		http.Error(w, "Invalid token claims", http.StatusInternalServerError)
-		return
-	}
-	username, ok := claims["username"].(string)
-	if !ok {
-		http.Error(w, "Invalid token payload", http.StatusUnauthorized)
-		return
-	}
-
-	// Limit request body size to 8 MB before parsing
-	r.Body = http.MaxBytesReader(w, r.Body, 8<<20) // 8 MB
-	err := r.ParseMultipartForm(8 << 20)
-	if err != nil {
-		http.Error(w, "File size exceeds 8MB", http.StatusRequestEntityTooLarge)
-		return
-	}
-
-	// Get the file
-	file, _, err := r.FormFile("pfp")
-	if err != nil {
-		http.Error(w, "Cannot read uploaded image", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	// Check MIME
+func checkMimeType(file multipart.File, allowed map[string]bool) error {
 	buf := make([]byte, 512)
-	_, err = file.Read(buf)
+	_, err := file.Read(buf)
 	if err != nil {
-		http.Error(w, "Failed to read image", http.StatusInternalServerError)
-		return
+		return fmt.Errorf("failed to read image")
 	}
 	contentType := http.DetectContentType(buf)
-	if contentType != "image/gif" {
-		http.Error(w, "Not a valid GIF", http.StatusBadRequest)
-		return
+	if !allowed[contentType] {
+		return fmt.Errorf("file type not allowed")
 	}
+	return nil
+}
 
-	// Rewind
-	_, err = file.Seek(0, io.SeekStart)
-	if err != nil {
-		http.Error(w, "Failed to rewind file", http.StatusInternalServerError)
-		return
-	}
-
-	// Create destination path
-	dstPath := filepath.Join("uploads", "pfp", username+".gif")
+func saveRawFile(src multipart.File, dstPath string) error {
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
-		http.Error(w, "Failed to save file", http.StatusInternalServerError)
-		return
+		return err
 	}
-
 	out, err := os.Create(dstPath)
 	if err != nil {
-		http.Error(w, "Failed to save file", http.StatusInternalServerError)
-		return
+		return err
 	}
 	defer out.Close()
-
-	// Efficient copy without loading full buffer into memory
-	if _, err := io.Copy(out, file); err != nil {
-		http.Error(w, "Failed to write file", http.StatusInternalServerError)
-		return
-	}
-	// Update DB with new path
-	_, err = db.Exec("UPDATE users SET pfp = ? WHERE username = ?", dstPath, username)
-	if err != nil {
-		log.Println("DB update error:", err)
-		http.Error(w, "Database update failed", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusAccepted)
-	w.Write([]byte("GIF uploaded successfully\n"))
+	_, err = io.Copy(out, src)
+	return err
 }
 
 func convertToWebP(src io.Reader, dstPath string) error {
@@ -207,6 +205,6 @@ func convertToWebP(src io.Reader, dstPath string) error {
 	defer out.Close()
 
 	// Encode to WebP
-	opts := &webp.Options{Lossless: true}
-	return webp.Encode(out, img, opts)
+	op := &webp.Options{Lossless: true}
+	return webp.Encode(out, img, op)
 }

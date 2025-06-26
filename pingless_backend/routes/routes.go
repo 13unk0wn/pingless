@@ -33,6 +33,12 @@ func Routes(db *sqlx.DB) {
 	r.With(user.VerifiyAccessToken).With(user.IsGifAllowed(db)).Post("/api/user/upload_pfp_gif", func(w http.ResponseWriter, r *http.Request) {
 		user.UpdatePfpGif(w, r, db)
 	})
+	r.With(user.VerifiyAccessToken).Post("/api/user/upload_banner", func(w http.ResponseWriter, r *http.Request) {
+		user.UpdateBanner(w, r, db)
+	})
+	r.With(user.VerifiyAccessToken).With(user.IsGifAllowed(db)).Post("/api/user/upload_banner_gif", func(w http.ResponseWriter, r *http.Request) {
+		user.UpdateBannerGif(w, r, db)
+	})
 	r.With(user.IsInviteOnly(db)).Post("/api/user/create_user", func(w http.ResponseWriter, r *http.Request) {
 		user.CreateUser(w, r, db)
 	})
