@@ -11,6 +11,8 @@ services:
       - PORT=3000
     expose:
       - "3000"
+    ports:
+      - "3000:3000"
 
   nginx:
     image: nginx:latest
@@ -18,7 +20,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      # - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./pingless_backend/uploads:/uploads:ro
     depends_on:
       - pingless-backend

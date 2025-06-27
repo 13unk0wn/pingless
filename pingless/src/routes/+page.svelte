@@ -1,17 +1,16 @@
 <script>
-	import {StepEmail} from "$lib/register/StepEmail.svelte"
-	let currentStep = $state(0);
+	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 
-	const steps = [StepEmail,StepOtp,StepUsername, StepPassword, StepConfirm];
+	let apiUrl = import.meta.env.VITE_BACKEND_URL;
+	console.log(apiUrl);
 
-	function prevStep() {
-		currentStep = Math.max(currentStep - 1, 0);
-	}
-	function nextStep() {
-		currentStep = Math.min(currentStep + 1, steps.length - 1);
-	}
+	onMount(() => {
+		let accessToken = localStorage.getItem('accessToken');
+		if (accessToken == null) {
+			goto('/login');
+		}
+	});
 </script>
 
-
-{@render steps[currentStep]()}
-
+<h1>Main Page</h1>
