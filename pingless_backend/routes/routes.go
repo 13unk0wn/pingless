@@ -53,6 +53,18 @@ func Routes(db *sqlx.DB) {
 	r.With(user.VerifiyAccessToken).With(serversetup.CanchangeServerSettings(db)).Post("/api/server/change_name", func(w http.ResponseWriter, r *http.Request) {
 		serversetup.SetServerName(w, r, db)
 	})
+	r.With(user.VerifiyAccessToken).With(serversetup.CanchangeServerSettings(db)).Post("/api/server/change_profile", func(w http.ResponseWriter, r *http.Request) {
+		serversetup.SetServerProfile(w, r, db)
+	})
+	r.With(user.VerifiyAccessToken).With(serversetup.CanchangeServerSettings(db)).Post("/api/server/change_profile_gif", func(w http.ResponseWriter, r *http.Request) {
+		serversetup.SetServerProfileGif(w, r, db)
+	})
+	r.With(user.VerifiyAccessToken).With(serversetup.CanchangeServerSettings(db)).Post("/api/server/change_banner", func(w http.ResponseWriter, r *http.Request) {
+		serversetup.SetServerBanner(w, r, db)
+	})
+	r.With(user.VerifiyAccessToken).With(serversetup.CanchangeServerSettings(db)).Post("/api/server/change_banner_gif", func(w http.ResponseWriter, r *http.Request) {
+		serversetup.SetServerBannerGif(w, r, db)
+	})
 	http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }
 

@@ -101,8 +101,8 @@ func createServerSettingsTable(db *sqlx.DB) error {
 		id INTEGER PRIMARY KEY CHECK (id = 1), 
 		name TEXT NOT NULL DEFAULT "",
 
-		icon_url TEXT,
-		banner_url TEXT,
+		pfp TEXT,
+		header TEXT,
 
 		allow_gif_pfp BOOLEAN NOT NULL DEFAULT TRUE,
 		invite_only BOOLEAN NOT NULL DEFAULT TRUE,

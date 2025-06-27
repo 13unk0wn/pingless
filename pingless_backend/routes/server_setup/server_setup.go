@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"pingless/internal/auditlog"
+	"pingless/internal/fileutil"
 	"pingless/routes/user"
 	"strings"
 
@@ -136,6 +137,56 @@ func SetServerName(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func setServerProfile(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+func SetServerProfile(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	config := fileutil.NewFileUploadConfig(
+		"pfp",
+		5<<20, // 5MB
+		map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true},
+		"pfp",
+		"pfp",
+		".webp",
+		true,
+	)
 
+	fileutil.ServerFileUpload(w, r, db, config)
+}
+
+func SetServerProfileGif(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	config := fileutil.NewFileUploadConfig(
+		"pfp",
+		8<<20, // 8MB
+		map[string]bool{"image/gif": true},
+		"pfp",
+		"pfp",
+		".gif",
+		false,
+	)
+
+	fileutil.ServerFileUpload(w, r, db, config)
+}
+
+func SetServerBanner(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	config := fileutil.NewFileUploadConfig(
+		"banner",
+		5<<20, // 5MB
+		map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true},
+		"banner",
+		"header",
+		".webp",
+		true,
+	)
+
+	fileutil.ServerFileUpload(w, r, db, config)
+}
+func SetServerBannerGif(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	config := fileutil.NewFileUploadConfig(
+		"banner",
+		8<<20, // 8MB
+		map[string]bool{"image/gif": true},
+		"banner",
+		"header",
+		".gif",
+		false,
+	)
+	fileutil.ServerFileUpload(w, r, db, config)
 }

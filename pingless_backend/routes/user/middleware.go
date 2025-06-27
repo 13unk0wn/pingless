@@ -23,21 +23,28 @@ func VerifiyAccessToken(next http.Handler) http.Handler {
 		}
 
 		jwtToken := authHeader[1]
-		token, err := jwt.Parse(jwtToken, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(jwtToken, func(token *jwt.Token) (any, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, errors.New("Not the same signing method")
+				return nil, errors.New("Unexpected signing method")
 			}
 			return []byte(secretKey), nil
 		})
 
-		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			ctx := context.WithValue(r.Context(), "props", claims)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		} else {
-			log.Println(err)
+		if err != nil {
+			log.Println("JWT parse error:", err)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok || !token.Valid {
+			log.Println("Invalid token or claims")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), "props", claims)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
