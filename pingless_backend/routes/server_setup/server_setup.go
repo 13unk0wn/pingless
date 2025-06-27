@@ -1,12 +1,18 @@
 package serversetup
 
+/*
+ADD LOG SUPPORT
+*/
+
 import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"pingless/internal/auditlog"
 	"pingless/routes/user"
 	"strings"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -75,6 +81,18 @@ func createOwnerQuery(db *sqlx.DB, user *user.CreateUserModel) error {
 }
 
 func SetServerName(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	claims, ok := r.Context().Value("props").(jwt.MapClaims)
+	if !ok {
+		log.Println("Invalid token claims context")
+		http.Error(w, "Invalid token claims", http.StatusInternalServerError)
+		return
+	}
+	username, err := claims["username"].(string)
+	if !err {
+		log.Println("username claim not a string")
+		http.Error(w, "Invalid token payload", http.StatusUnauthorized)
+		return
+	}
 	var server SetServerNameStruct
 
 	if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
@@ -93,10 +111,31 @@ func SetServerName(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
 		return
 	}
 
-	_, err := db.Exec("UPDATE server_settings SET name =  ? WHERE id = 1", server.ServerName)
-	if err != nil {
+	row := db.QueryRowx(`
+	UPDATE server_settings 
+	SET name = ? 
+	WHERE id = 1 
+	RETURNING name
+`, server.ServerName)
+
+	var oldName string
+	if err := row.Scan(&oldName); err != nil {
+		log.Println(err)
 		http.Error(w, "DB ERROR", http.StatusInternalServerError)
 		return
 	}
+	auditlog.Record(db, auditlog.AuditLog{
+		UserName: username,
+		Action:   "change_server_name",
+		Target:   "server_name",
+		Metadata: map[string]string{
+			"old": oldName,
+			"new": server.ServerName,
+		},
+	})
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func setServerProfile(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+
 }

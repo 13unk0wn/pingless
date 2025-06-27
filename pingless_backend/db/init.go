@@ -47,6 +47,9 @@ func makeMigration(db *sqlx.DB) error {
 	if err := createRoleTable(db); err != nil {
 		return err
 	}
+	if err := createLogTable(db); err != nil {
+		return err
+	}
 	return nil
 }
 func makeUserMigration(db *sqlx.DB) error {
@@ -124,7 +127,8 @@ func createServerSettingsTable(db *sqlx.DB) error {
 func createPermissionTable(db *sqlx.DB) error {
 	schema := `CREATE TABLE IF NOT EXISTS permissions (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	can_server_setting BOOLEAN NOT NULL DEFAULT FALSE
+	can_server_setting BOOLEAN NOT NULL DEFAULT FALSE,
+	can_see_server_logs BOOLEAN NOT NULL DEFAULT FALSE
 );
 `
 	if _, err := db.Exec(schema); err != nil {
@@ -148,6 +152,23 @@ func createRoleTable(db *sqlx.DB) error {
 
 	return nil
 }
+func createLogTable(db *sqlx.DB) error {
+	schema := `CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_name TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target TEXT, -- e.g. "server_name", "monitor_id"
+    metadata TEXT, -- JSON (like old value, new value)
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+);`
+
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func insertInitialRolesAndPermissions(db *sqlx.DB) error {
 	tx, err := db.Beginx()
 	if err != nil {
@@ -172,7 +193,7 @@ func insertInitialRolesAndPermissions(db *sqlx.DB) error {
 	}
 
 	// Insert permissions
-	_, err = tx.Exec(`INSERT INTO permissions (can_server_setting) VALUES (TRUE);`)
+	_, err = tx.Exec(`INSERT INTO permissions (can_server_setting,can_see_server_logs) VALUES (TRUE,TRUE);`)
 	if err != nil {
 		tx.Rollback()
 		return err
