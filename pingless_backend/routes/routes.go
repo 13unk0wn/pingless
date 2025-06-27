@@ -65,6 +65,16 @@ func Routes(db *sqlx.DB) {
 	r.With(user.VerifiyAccessToken).With(serversetup.CanchangeServerSettings(db)).Post("/api/server/change_banner_gif", func(w http.ResponseWriter, r *http.Request) {
 		serversetup.SetServerBannerGif(w, r, db)
 	})
+	r.Get("/api/user/images", func(w http.ResponseWriter, r *http.Request) {
+		user.GetUserImages(w, r, db)
+	})
+	r.Get("/api/images/info", func(w http.ResponseWriter, r *http.Request) {
+		user.GetImageInfo(w, r, db)
+	})
+	r.Get("/api/user/image", func(w http.ResponseWriter, r *http.Request) {
+		user.GetUserImageByType(w, r, db)
+	})
+
 	http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 }
 

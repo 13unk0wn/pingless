@@ -1,6 +1,9 @@
 package fileutil
 
 import (
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"image"
 	"io"
@@ -10,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"pingless/internal/auditlog"
+	"time"
 
 	"github.com/chai2010/webp"
 	"github.com/golang-jwt/jwt/v5"
@@ -44,6 +48,22 @@ func NewFileUploadConfig(
 		fileExtension:    fileExtension,
 		isWebp:           isWebp,
 	}
+}
+
+func generateUniqueFileName(imageType, extension string) string {
+	timestamp := time.Now().Unix()
+	randomStr := fmt.Sprintf("%d", timestamp)[:8]
+	return fmt.Sprintf("%s_%d_%s%s", imageType, timestamp, randomStr, extension)
+}
+func generateFileHash(file multipart.File) (string, error) {
+	hash := md5.New()
+	file.Seek(0, io.SeekStart)
+	_, err := io.Copy(hash, file)
+	if err != nil {
+		return "", err
+	}
+	file.Seek(0, io.SeekStart)
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func CheckMimeType(file multipart.File, allowed map[string]bool) error {
@@ -119,8 +139,16 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request, db *sqlx.DB, confi
 		return
 	}
 
+	var userID int
+	err = db.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
+	if err != nil {
+		log.Println("User not found:", err)
+		http.Error(w, "User not found", http.StatusInternalServerError)
+		return
+	}
+
 	// Get the file
-	file, _, err := r.FormFile(config.formFieldName)
+	file, header, err := r.FormFile(config.formFieldName)
 	if err != nil {
 		http.Error(w, "Cannot read uploaded image", http.StatusBadRequest)
 		return
@@ -133,14 +161,21 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request, db *sqlx.DB, confi
 		return
 	}
 
+	fileName := generateUniqueFileName(config.uploadSubDir, config.fileExtension)
+	fileHash, err := generateFileHash(file)
+	if err != nil {
+		http.Error(w, "Cannot hash the value", http.StatusInternalServerError)
+		return
+	}
+
 	// Rewind file
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		http.Error(w, "Failed to rewind file", http.StatusInternalServerError)
 		return
 	}
 
-	// Save file
-	dstPath := filepath.Join("uploads", config.uploadSubDir, username+config.fileExtension)
+	// Save file with generated filename
+	dstPath := filepath.Join("uploads", config.uploadSubDir, fileName)
 	if config.isWebp {
 		err = ConvertToWebP(file, dstPath)
 	} else {
@@ -152,19 +187,53 @@ func HandleFileUpload(w http.ResponseWriter, r *http.Request, db *sqlx.DB, confi
 		return
 	}
 
-	// Update DB with new path
-	query := fmt.Sprintf("UPDATE users SET %s = ? WHERE username = ?", config.dbColumnName)
-	_, err = db.Exec(query, dstPath, username)
+	fileInfo, err := os.Stat(dstPath)
 	if err != nil {
-		log.Println("DB update error:", err)
-		http.Error(w, "Database update failed", http.StatusInternalServerError)
+		log.Println("Failed to get file info:", err)
+		http.Error(w, "Failed to process file", http.StatusInternalServerError)
 		return
 	}
 
-	// Success
+	// Store image metadata in database
+	query := `
+		INSERT INTO images (user_id, image_type, file_name, file_size, mime_type, hash, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(user_id, image_type) DO UPDATE SET
+			file_name = excluded.file_name,
+			file_size = excluded.file_size,
+			mime_type = excluded.mime_type,
+			hash = excluded.hash,
+			updated_at = excluded.updated_at
+	`
+
+	now := time.Now()
+	_, err = db.Exec(query,
+		userID,
+		config.uploadSubDir, // image_type (pfp or banner)
+		fileName,
+		fileInfo.Size(),
+		header.Header.Get("Content-Type"),
+		fileHash,
+		now,
+		now,
+	)
+	if err != nil {
+		log.Println("Failed to store image metadata:", err)
+		http.Error(w, "Failed to store image metadata", http.StatusInternalServerError)
+		return
+	}
+
+	// Return JSON response with image URL
+	imageURL := fmt.Sprintf("/images/%s", fileName)
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	w.Write([]byte("File uploaded successfully\n"))
+	json.NewEncoder(w).Encode(map[string]string{
+		"message":   "File uploaded successfully",
+		"image_url": imageURL,
+		"file_name": fileName,
+	})
 }
+
 func ServerFileUpload(w http.ResponseWriter, r *http.Request, db *sqlx.DB, config *FileUploadConfig) {
 	claims, ok := r.Context().Value("props").(jwt.MapClaims)
 	if !ok {

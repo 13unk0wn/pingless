@@ -50,6 +50,9 @@ func makeMigration(db *sqlx.DB) error {
 	if err := createLogTable(db); err != nil {
 		return err
 	}
+	if err := createImageTable(db); err != nil {
+		return err
+	}
 	return nil
 }
 func makeUserMigration(db *sqlx.DB) error {
@@ -60,8 +63,7 @@ CREATE TABLE IF NOT EXISTS users (
 	email VARCHAR(319) NOT NULL UNIQUE,
 	password_hash TEXT NOT NULL,
 
-	pfp TEXT,                  -- avatar URL or path
-	header TEXT,               -- banner URL or path
+	
 	bio TEXT DEFAULT '',
 
 	role_id INTEGER NOT NULL DEFAULT 2 REFERENCES roles(id) ON DELETE SET NULL,
@@ -162,6 +164,27 @@ func createLogTable(db *sqlx.DB) error {
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 );`
 
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createImageTable(db *sqlx.DB) error {
+	schema := `CREATE TABLE IF NOT EXISTS images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    image_type TEXT NOT NULL CHECK (image_type IN ('pfp', 'banner')),
+    file_name TEXT NOT NULL,
+    file_size INTEGER NOT NULL,
+    mime_type TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, image_type),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);`
 	if _, err := db.Exec(schema); err != nil {
 		return err
 	}

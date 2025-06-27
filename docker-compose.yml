@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  pingless-backend:
+    build: ./pingless_backend
+    container_name: pingless-backend
+    volumes:
+      - ./pingless_backend/uploads:/uploads
+      - ./pingless_backend/.env:/app/.env:ro
+    environment:
+      - PORT=3000
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:latest
+    container_name: pingless-nginx
+    ports:
+      - "80:80"
+    volumes:
+      # - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./pingless_backend/uploads:/uploads:ro
+    depends_on:
+      - pingless-backend
