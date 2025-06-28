@@ -53,6 +53,63 @@ func CreateUser(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
 	w.Write([]byte("User Created\n"))
 }
 
+func ChangePassword(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
+	var password changePasswordModel
+	if err := json.NewDecoder(r.Body).Decode(&password); err != nil {
+		log.Println(err)
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	claims, ok := r.Context().Value("props").(jwt.MapClaims)
+	if !ok {
+		log.Println("Invalid token claims context")
+		http.Error(w, "Invalid token claims", http.StatusInternalServerError)
+		return
+	}
+	username, err := claims["username"].(string)
+	if !err {
+		log.Println("username claim not a string")
+		http.Error(w, "Invalid token payload", http.StatusUnauthorized)
+		return
+	}
+	var storedHashPassword string
+	error := db.QueryRow("SELECT password_hash FROM users WHERE username = ?", username).Scan(&storedHashPassword)
+	if error != nil {
+		log.Println(err)
+		http.Error(w, "DB ERROR", http.StatusBadRequest)
+		return
+
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(storedHashPassword), []byte(password.Password)); err != nil {
+		// If passwords don't match or there's an error during comparison (e.g., bad hash format)
+		if err == bcrypt.ErrMismatchedHashAndPassword {
+			http.Error(w, "Invalid credentials", http.StatusUnauthorized) // Incorrect password
+			return
+		}
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	hashPassword, hasherr := bcrypt.GenerateFromPassword([]byte(password.NewPassword), bcrypt.DefaultCost)
+	if hasherr != nil {
+		log.Println(hasherr)
+		http.Error(w, "Hash Error", http.StatusInternalServerError)
+		return
+	}
+	if err := updatePassword(db, string(hashPassword), username); err != nil {
+		log.Println(err)
+		http.Error(w, "Database Error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte("Password Updated \n"))
+}
+
+func updatePassword(db *sqlx.DB, hashPassword string, username string) error {
+	_, err := db.Exec("UPDATE users SET password_hash =  ? WHERE username = ?", hashPassword, username)
+	return err
+}
+
 func insertUser(db *sqlx.DB, user *CreateUserModel) error {
 	_, err := db.Exec("INSERT INTO users (email,username,password_hash) VALUES (?,?,?)", user.Email, user.Username, user.Password)
 	return err

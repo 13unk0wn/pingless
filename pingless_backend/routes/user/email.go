@@ -3,8 +3,10 @@ package user
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
@@ -20,7 +22,6 @@ NOTE : This file deal with all the email and otp verification
 
 TODO:
  [ ] Add option for custom email template
- [ ] Add middleware for these endpoints to not work when Server is set to invite only
 */
 
 // TODO : dont send email if already Verified
@@ -32,29 +33,89 @@ func Email(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-
 	defer r.Body.Close()
-	var verify EmailVerification
 
-	verify.Email = email.Email
-	otp := generateOtp()
-	verify.OtpHash = HashOTP(otp)
-	verify.CreatedAt = time.Now()
-	verify.Verified = false
-
-	if err := insertEmailVerification(db, &verify); err != nil {
-		log.Println(err)
-		http.Error(w, "Database Error", http.StatusInternalServerError)
+	verified, created_at, exist, error := checkEmailExist(db, email.Email)
+	if verified {
+		http.Error(w, "BAD REQUEST", http.StatusBadRequest)
 		return
 	}
-	if err := sendEmail(db, email.Email, otp); err != nil {
-		log.Println(err)
-		http.Error(w, "Verification email Cannot Be Send", http.StatusInternalServerError)
+	if error != nil {
+		log.Println(error)
+		http.Error(w, "DB ERROR", http.StatusInternalServerError)
 		return
 	}
+	if exist {
+		if !time.Now().After(created_at.Add(10 * time.Minute)) {
+			http.Error(w, "Email is already send wait 10 minutes to send again", http.StatusBadRequest)
+			return
+		}
 
+		otp := generateOtp()
+		hashOtp := HashOTP(otp)
+		// Update created_at and Otp
+		if err := UpdateCreatedAt(db, email.Email, hashOtp); err != nil {
+			log.Println(err)
+			http.Error(w, "DB ERROR", http.StatusInternalServerError)
+			return
+		}
+		if err := sendEmail(db, email.Email, hashOtp); err != nil {
+			log.Println(err)
+			http.Error(w, "Verification email Cannot Be Send", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		var verify EmailVerification
+
+		verify.Email = email.Email
+		otp := generateOtp()
+		verify.OtpHash = HashOTP(otp)
+		verify.CreatedAt = time.Now()
+		verify.Verified = false
+
+		if err := insertEmailVerification(db, &verify); err != nil {
+			log.Println(err)
+			http.Error(w, "Database Error", http.StatusInternalServerError)
+			return
+		}
+		if err := sendEmail(db, email.Email, otp); err != nil {
+			log.Println(err)
+			http.Error(w, "Verification email Cannot Be Send", http.StatusInternalServerError)
+			return
+		}
+
+	}
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte("Email Send\n"))
+}
+
+func checkEmailExist(db *sqlx.DB, email string) (bool, time.Time, bool, error) {
+	var createdAt time.Time
+	var verified bool
+	err := db.QueryRow("SELECT created_at, verified FROM email_verifications WHERE email = ? LIMIT 1", email).Scan(&createdAt, &verified)
+	if verified {
+		return true, createdAt, false, nil
+	}
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, createdAt, false, nil
+		} else {
+			return false, createdAt, false, err
+		}
+	} else {
+		return false, createdAt, true, nil
+	}
+}
+
+func UpdateCreatedAt(db *sqlx.DB, email string, hashOtp string) error {
+	_, err := db.Exec(`
+		UPDATE email_verifications
+		SET created_at = ?,
+		otp_hash = ?
+		WHERE email = ?`,
+		time.Now(), hashOtp, email,
+	)
+	return err
 }
 
 // TODO : Reject Request when already verified
@@ -68,10 +129,15 @@ func OtpVerify(w http.ResponseWriter, r *http.Request, db *sqlx.DB) {
 	}
 	var hashedOrignalOtp string
 	var created_at time.Time
-	err := db.QueryRow("SELECT otp_hash,created_at FROM email_verifications WHERE email = ? ", otp.Email).Scan(&hashedOrignalOtp, &created_at)
+	var verified bool
+	err := db.QueryRow("SELECT otp_hash,created_at,verified FROM email_verifications WHERE email = ? ", otp.Email).Scan(&hashedOrignalOtp, &created_at, &verified)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "Database Error", http.StatusInternalServerError)
+		return
+	}
+	if verified {
+		http.Error(w, "BAD REQUEST", http.StatusBadRequest)
 		return
 	}
 	hashedUserOtp := HashOTP(otp.Otp)

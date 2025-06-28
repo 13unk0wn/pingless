@@ -32,3 +32,8 @@ type VerifyUserModel struct {
 type UpdateBioModel struct {
 	Bio string `json:"bio" db:"bio"`
 }
+
+type changePasswordModel struct {
+	Password    string `json:"password" db:"password"`
+	NewPassword string `json : "new_password"`
+}
