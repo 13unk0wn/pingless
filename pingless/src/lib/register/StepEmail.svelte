@@ -1,7 +1,6 @@
 <script>
 	const apiUrl = import.meta.env.VITE_BACKEND_URL;
 	import axios from 'axios';
-	import { Button } from '$lib/components/ui/button';
 
 	const { step } = $props();
 
@@ -24,5 +23,5 @@
 			bind:value={email}
 		/>
 	</div>
-	<Button class="ease my-2 rounded-md border">Submit</Button>
+	<button class="ease my-2 rounded-md border">Submit</button>
 </form>

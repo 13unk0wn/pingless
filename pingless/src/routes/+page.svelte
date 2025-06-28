@@ -13,4 +13,3 @@
 	});
 </script>
 
-<h1>Main Page</h1>
